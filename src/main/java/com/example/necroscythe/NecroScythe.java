@@ -26,7 +26,7 @@ public class NecroScythe implements ClientModInitializer {
         final DisplayEntity.ItemDisplayEntity entity;
         final double targetX, targetY, targetZ;
         int tick = 0;
-        final int maxTicks = 12; // Длительность удара: 12 тиков (0.6 сек) для резкого замаха
+        final int maxTicks = 6; // Длительность удара: 12 тиков (0.6 сек) для резкого замаха
 
         SlashEffect(DisplayEntity.ItemDisplayEntity entity, double x, double y, double z) {
             this.entity = entity;
