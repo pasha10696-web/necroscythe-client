@@ -97,7 +97,7 @@ public class NecroScythe implements ClientModInitializer {
                     slash.entity.setPosition(currentX, currentY, slash.targetZ);
 
                     // Поворачиваем сам меч/косу вслед за дугой замаха
-                    float weaponRotation = 45f + eased * 135f;
+                    float weaponRotation = 135f + eased * 135f;
                     AffineTransformation transformation = new AffineTransformation(
                             new Vector3f(0, 0, 0),
                             new Quaternionf().rotateZ((float) Math.toRadians(weaponRotation)),
