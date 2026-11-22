@@ -85,7 +85,7 @@ public class NecroScythe implements ClientModInitializer {
     private void spawnClientScythe(MinecraftClient client, ClientWorld world, double x, double y, double z) {
         DisplayEntity.ItemDisplayEntity scythe = new DisplayEntity.ItemDisplayEntity(EntityType.ITEM_DISPLAY, world);
         scythe.setPosition(x, y + 5.0, z);
-        scythe.setItemStack(new ItemStack(Items.NETHERITE_HOE));
+        scythe.setItemStack(new ItemStack(Items.NETHERITE_SWORD));
 
         AffineTransformation transformation = new AffineTransformation(
                 new Vector3f(0, 0, 0),
