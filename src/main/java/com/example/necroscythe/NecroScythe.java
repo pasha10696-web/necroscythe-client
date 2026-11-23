@@ -21,12 +21,11 @@ import java.util.*;
 
 public class NecroScythe implements ClientModInitializer {
 
-    // Вспомогательный класс для хранения позиции жертвы и прогресса замаха
     private static class SlashEffect {
         final DisplayEntity.ItemDisplayEntity entity;
         final double targetX, targetY, targetZ;
         int tick = 0;
-        final int maxTicks = 10; // Длительность удара: 12 тиков (0.6 сек) для резкого замаха
+        final int maxTicks = 10; // Быстрый резкий замах (0.3 секунды)
 
         SlashEffect(DisplayEntity.ItemDisplayEntity entity, double x, double y, double z) {
             this.entity = entity;
@@ -49,7 +48,7 @@ public class NecroScythe implements ClientModInitializer {
                 return;
             }
 
-            // 1. Отслеживаем смерть игроков рядом
+            // 1. Отслеживаем смерть игроков рядом в радиусе 15 блоков
             for (PlayerEntity player : world.getPlayers()) {
                 if (player == client.player) continue;
 
@@ -63,14 +62,14 @@ public class NecroScythe implements ClientModInitializer {
                 }
             }
 
-            // 2. Анимируем удар по дуге справа налево-вниз
+            // 2. Анимируем резкий удар косой по дуге справа налево-вниз
             Iterator<SlashEffect> it = ACTIVE_SLASHES.iterator();
             while (it.hasNext()) {
                 SlashEffect slash = it.next();
                 slash.tick++;
 
                 if (slash.tick > slash.maxTicks) {
-                    // Взрыв частиц душ и звук при завершении удара
+                    // Взрыв частиц душ и звук при ударе о землю
                     for (int i = 0; i < 25; i++) {
                         world.addParticleClient(ParticleTypes.SOUL_FIRE_FLAME,
                                 slash.targetX + (world.random.nextDouble() - 0.5),
@@ -83,21 +82,18 @@ public class NecroScythe implements ClientModInitializer {
                     slash.entity.remove(Entity.RemovalReason.DISCARDED);
                     it.remove();
                 } else {
-                    // Прогресс от 0.0 (вертикально справа) до 1.0 (диагональный удар в игрока)
                     float progress = (float) slash.tick / slash.maxTicks;
-                    // Ускорение к концу удара (эффект тяжелого замаха)
                     float eased = progress * progress;
 
-                    // Движение по дуге: от X + 2.5 до X + 0.5, и сверху вниз от Y + 2.8 до Y + 0.8
-                    double angle = Math.toRadians(15 + eased * 105); // от 15° (почти вертикально) до 120° (наклон на игрока)
+                    double angle = Math.toRadians(15 + eased * 105);
                     double radius = 2.2;
                     double currentX = slash.targetX + Math.cos(angle) * radius + 0.8;
                     double currentY = slash.targetY + Math.sin(angle) * radius + 0.8;
 
                     slash.entity.setPosition(currentX, currentY, slash.targetZ);
 
-                    // Поворачиваем сам меч/косу вслед за дугой замаха
-                    float weaponRotation = 135f + eased * 135f;
+                    // Правильный угол для косы (лезвием вперёд и вниз)
+                    float weaponRotation = 45f + eased * 135f;
                     AffineTransformation transformation = new AffineTransformation(
                             new Vector3f(0, 0, 0),
                             new Quaternionf().rotateZ((float) Math.toRadians(weaponRotation)),
@@ -106,7 +102,7 @@ public class NecroScythe implements ClientModInitializer {
                     );
                     slash.entity.setTransformation(transformation);
 
-                    // Шлейф частиц вдоль лезвия во время замаха (как полосы на рисунке)
+                    // Шлейф зелёных частиц вдоль лезвия косы
                     for (int i = 0; i < 6; i++) {
                         world.addParticleClient(ParticleTypes.HAPPY_VILLAGER,
                                 currentX + (world.random.nextDouble() - 0.5) * 0.9,
@@ -122,9 +118,7 @@ public class NecroScythe implements ClientModInitializer {
     private void spawnSlash(MinecraftClient client, ClientWorld world, double x, double y, double z) {
         DisplayEntity.ItemDisplayEntity weapon = new DisplayEntity.ItemDisplayEntity(EntityType.ITEM_DISPLAY, world);
         weapon.setPosition(x + 2.8, y + 2.5, z);
-        
-        // Используем незеритовый меч (можно поменять на Items.NETHERITE_HOE для косы)
-        weapon.setItemStack(new ItemStack(Items.NETHERITE_SWORD));
+        weapon.setItemStack(new ItemStack(Items.NETHERITE_HOE));
 
         AffineTransformation startTransform = new AffineTransformation(
                 new Vector3f(0, 0, 0),
@@ -140,3 +134,4 @@ public class NecroScythe implements ClientModInitializer {
         ACTIVE_SLASHES.add(new SlashEffect(weapon, x, y, z));
     }
 }
+
