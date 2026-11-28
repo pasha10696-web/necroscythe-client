@@ -21,21 +21,21 @@ import java.util.*;
 
 public class NecroScythe implements ClientModInitializer {
 
-    private static class SlashEffect {
+    private static class TotemEffect {
         final DisplayEntity.ItemDisplayEntity entity;
-        final double targetX, targetY, targetZ;
+        final double startX, startY, startZ;
         int tick = 0;
-        final int maxTicks = 10; // Быстрый резкий замах (0.3 секунды)
+        final int maxTicks = 25; // Тотем красиво крутится и взлетает 1.25 секунды
 
-        SlashEffect(DisplayEntity.ItemDisplayEntity entity, double x, double y, double z) {
+        TotemEffect(DisplayEntity.ItemDisplayEntity entity, double x, double y, double z) {
             this.entity = entity;
-            this.targetX = x;
-            this.targetY = y;
-            this.targetZ = z;
+            this.startX = x;
+            this.startY = y;
+            this.startZ = z;
         }
     }
 
-    private static final List<SlashEffect> ACTIVE_SLASHES = new ArrayList<>();
+    private static final List<TotemEffect> ACTIVE_TOTEMS = new ArrayList<>();
     private static final Set<UUID> DEAD_PLAYERS = new HashSet<>();
 
     @Override
@@ -43,7 +43,7 @@ public class NecroScythe implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ClientWorld world = client.world;
             if (world == null || client.player == null) {
-                ACTIVE_SLASHES.clear();
+                ACTIVE_TOTEMS.clear();
                 DEAD_PLAYERS.clear();
                 return;
             }
@@ -55,83 +55,84 @@ public class NecroScythe implements ClientModInitializer {
                 if (!player.isAlive() || player.getHealth() <= 0) {
                     if (!DEAD_PLAYERS.contains(player.getUuid()) && player.distanceTo(client.player) <= 15.0) {
                         DEAD_PLAYERS.add(player.getUuid());
-                        spawnSlash(client, world, player.getX(), player.getY(), player.getZ());
+                        spawnTotem(client, world, player.getX(), player.getY(), player.getZ());
                     }
                 } else {
                     DEAD_PLAYERS.remove(player.getUuid());
                 }
             }
 
-            // 2. Анимируем резкий удар косой по дуге справа налево-вниз
-            Iterator<SlashEffect> it = ACTIVE_SLASHES.iterator();
+            // 2. Анимируем взлёт и вращение тотема на месте убитого игрока
+            Iterator<TotemEffect> it = ACTIVE_TOTEMS.iterator();
             while (it.hasNext()) {
-                SlashEffect slash = it.next();
-                slash.tick++;
+                TotemEffect totem = it.next();
+                totem.tick++;
 
-                if (slash.tick > slash.maxTicks) {
-                    // Взрыв частиц душ и звук при ударе о землю
-                    for (int i = 0; i < 25; i++) {
-                        world.addParticleClient(ParticleTypes.SOUL_FIRE_FLAME,
-                                slash.targetX + (world.random.nextDouble() - 0.5),
-                                slash.targetY + 0.8,
-                                slash.targetZ + (world.random.nextDouble() - 0.5),
-                                0, 0.06, 0);
+                if (totem.tick > totem.maxTicks) {
+                    // Финальный салют из частиц тотема при исчезновении
+                    for (int i = 0; i < 30; i++) {
+                        world.addParticleClient(ParticleTypes.TOTEM_OF_UNDYING,
+                                totem.startX,
+                                totem.startY + 2.2,
+                                totem.startZ,
+                                (world.random.nextDouble() - 0.5) * 0.6,
+                                world.random.nextDouble() * 0.4,
+                                (world.random.nextDouble() - 0.5) * 0.6);
                     }
-                    world.playSound(client.player, slash.targetX, slash.targetY, slash.targetZ,
-                            SoundEvents.ENTITY_GENERIC_EXPLODE.value(), SoundCategory.PLAYERS, 0.8f, 0.7f);
-                    slash.entity.remove(Entity.RemovalReason.DISCARDED);
+                    totem.entity.remove(Entity.RemovalReason.DISCARDED);
                     it.remove();
                 } else {
-                    float progress = (float) slash.tick / slash.maxTicks;
-                    float eased = progress * progress;
+                    float progress = (float) totem.tick / totem.maxTicks;
+                    
+                    // Тотем плавно поднимается вверх над местом смерти
+                    double currentY = totem.startY + 0.5 + progress * 2.0;
+                    totem.entity.setPosition(totem.startX, currentY, totem.startZ);
 
-                    double angle = Math.toRadians(15 + eased * 105);
-                    double radius = 2.2;
-                    double currentX = slash.targetX + Math.cos(angle) * radius + 0.8;
-                    double currentY = slash.targetY + Math.sin(angle) * radius + 0.8;
+                    // Быстро вращается вокруг своей оси и постепенно уменьшается к концу
+                    float spinAngle = totem.tick * 25f;
+                    float scale = 2.5f * (1.0f - progress * 0.4f);
 
-                    slash.entity.setPosition(currentX, currentY, slash.targetZ);
-
-                    // Правильный угол для косы (лезвием вперёд и вниз)
-                    float weaponRotation = 45f + eased * 135f;
                     AffineTransformation transformation = new AffineTransformation(
                             new Vector3f(0, 0, 0),
-                            new Quaternionf().rotateZ((float) Math.toRadians(weaponRotation)),
-                            new Vector3f(3.5f, 3.5f, 3.5f),
+                            new Quaternionf().rotateY((float) Math.toRadians(spinAngle)),
+                            new Vector3f(scale, scale, scale),
                             new Quaternionf()
                     );
-                    slash.entity.setTransformation(transformation);
+                    totem.entity.setTransformation(transformation);
 
-                    // Шлейф зелёных частиц вдоль лезвия косы
-                    for (int i = 0; i < 6; i++) {
-                        world.addParticleClient(ParticleTypes.HAPPY_VILLAGER,
-                                currentX + (world.random.nextDouble() - 0.5) * 0.9,
-                                currentY + (world.random.nextDouble() - 0.5) * 0.9,
-                                slash.targetZ + (world.random.nextDouble() - 0.5) * 0.5,
-                                0.05, 0.02, 0);
+                    // Фирменные золотые и зелёные искры тотема вокруг
+                    for (int i = 0; i < 4; i++) {
+                        world.addParticleClient(ParticleTypes.TOTEM_OF_UNDYING,
+                                totem.startX + (world.random.nextDouble() - 0.5) * 0.8,
+                                currentY + (world.random.nextDouble() - 0.5) * 0.8,
+                                totem.startZ + (world.random.nextDouble() - 0.5) * 0.8,
+                                (world.random.nextDouble() - 0.5) * 0.2,
+                                0.1,
+                                (world.random.nextDouble() - 0.5) * 0.2);
                     }
                 }
             }
         });
     }
 
-    private void spawnSlash(MinecraftClient client, ClientWorld world, double x, double y, double z) {
-        DisplayEntity.ItemDisplayEntity weapon = new DisplayEntity.ItemDisplayEntity(EntityType.ITEM_DISPLAY, world);
-        weapon.setPosition(x + 2.8, y + 2.5, z);
-        weapon.setItemStack(new ItemStack(Items.NETHERITE_HOE));
+    private void spawnTotem(MinecraftClient client, ClientWorld world, double x, double y, double z) {
+        DisplayEntity.ItemDisplayEntity totem = new DisplayEntity.ItemDisplayEntity(EntityType.ITEM_DISPLAY, world);
+        totem.setPosition(x, y + 0.5, z);
+        totem.setItemStack(new ItemStack(Items.TOTEM_OF_UNDYING));
 
         AffineTransformation startTransform = new AffineTransformation(
                 new Vector3f(0, 0, 0),
-                new Quaternionf().rotateZ((float) Math.toRadians(45)),
-                new Vector3f(3.5f, 3.5f, 3.5f),
+                new Quaternionf(),
+                new Vector3f(2.5f, 2.5f, 2.5f),
                 new Quaternionf()
         );
-        weapon.setTransformation(startTransform);
+        totem.setTransformation(startTransform);
 
-        world.addEntity(weapon);
-        world.playSound(client.player, x, y, z, SoundEvents.ENTITY_WITHER_SPAWN, SoundCategory.PLAYERS, 1.0f, 0.6f);
+        world.addEntity(totem);
+        // Оригинальный громкий звук срабатывания тотема!
+        world.playSound(client.player, x, y, z, SoundEvents.ITEM_TOTEM_USE, SoundCategory.PLAYERS, 0.9f, 1.0f);
 
-        ACTIVE_SLASHES.add(new SlashEffect(weapon, x, y, z));
+        ACTIVE_TOTEMS.add(new TotemEffect(totem, x, y, z));
     }
 }
 
